@@ -1,6 +1,6 @@
 services:
   sk5proxy:
-    image: ${SK5_IMAGE:-sk5proxy:offline}
+    image: ${SK5_IMAGE:-buffer1705/sk5proxy:v1.0.0}
     pull_policy: missing
     restart: unless-stopped
     environment:
