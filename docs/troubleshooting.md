@@ -1,14 +1,10 @@
 # 故障排查
 
-对照仓库里的 `docker-compose.offline.yml`、`docker-compose.yml`、`Dockerfile`、`config.example.json` 与 `internal/` 实现。
+对照仓库里的 `docker-compose.yml`、`Dockerfile`、`config.example.json` 与 `internal/` 实现。
 
-## 构建时 Go 模块下载超时（离线环境）
+## 不需要构建、不需要下载 Go 模块
 
-**现象**：`docker compose -f docker-compose.build.yml up -d --build` 卡在 `go mod download` 或类似步骤，报网络超时。
-
-**原因**：显式开发文件 `docker-compose.build.yml` 带 `build:`，构建期要联网拉 Go 模块（`Dockerfile` 里的 `RUN go mod download`）。离线机器上必然失败。
-
-**联网机器**：直接拉 Docker Hub 已发布的多架构镜像即可，完全不构建：
+Docker Hub 部署直接拉已发布的多架构镜像，**不做源码构建，也不下载任何 Go 模块**，因此不会遇到 `go mod download` 超时之类的构建期网络问题。默认 `docker-compose.yml` 没有 `build:` 段，只拉镜像：
 
 ```bash
 # .env 里 SK5_IMAGE=buffer1705/sk5proxy:v1.0.0（cp .env.example .env 即是此默认）
@@ -16,25 +12,7 @@ docker compose pull
 docker compose up -d
 ```
 
-**离线绕过**：不能联网时改用 `docker load` 的本地归档镜像：
-
-```bash
-cd dist
-sha256sum -c sk5proxy-v1.0.0-linux-amd64.tar.gz.sha256
-docker load -i sk5proxy-v1.0.0-linux-amd64.tar.gz
-cd ..
-# .env 里 SK5_IMAGE=sk5proxy:offline
-docker compose up -d
-```
-
-离线镜像已经把二进制打进去了，启动路径完全不触网、不下载任何模块。归档由发布方单独提供，见 `docs/deployment.md`。
-
-若确实要在联网机器上构建，再把镜像导出搬到离线机：
-
-```bash
-scripts/build-image.sh v1.0.0
-# 将 dist/ 中归档和 .sha256 一起拷到离线机
-```
+若 `docker compose pull` 本身报网络超时，是宿主机到 Docker Hub 的连通性问题：确认能访问 Docker Hub、必要时配置镜像加速或代理；Private 仓库还需先 `docker login`。
 
 ## 端口绑定冲突
 
@@ -46,7 +24,7 @@ scripts/build-image.sh v1.0.0
 
    ```bash
    ss -ltnp | grep -E ':(8081|1080|8080|10080)'   # 看谁占了
-   docker compose -f docker-compose.offline.yml ps # 看是否重复启动
+   docker compose ps                               # 看是否重复启动
    ```
 
    腾出端口，或改 compose 映射 / `.env` 范围后重建。
@@ -57,9 +35,11 @@ scripts/build-image.sh v1.0.0
 
 ## 架构不匹配：amd64 与 ARM
 
-**现象**：`docker load` 或启动后容器立刻退出，报 `exec format error` 或平台不匹配警告。
+**现象**：启动后容器立刻退出，报 `exec format error` 或平台不匹配警告。
 
-**原因**：归档文件名中的架构必须匹配宿主机；`linux-amd64` 镜像无法在 ARM（如 Apple Silicon、树莓派、ARM 云主机）原生运行。
+**原因**：容器镜像架构与宿主机不符。
+
+**通常不该发生**：Docker Hub 上的 `buffer1705/sk5proxy` 是覆盖 `linux/amd64` 与 `linux/arm64` 的多架构清单，`docker compose pull` 会按宿主架构自动挑选，无需手动区分。
 
 **确认宿主机架构**：
 
@@ -67,28 +47,29 @@ scripts/build-image.sh v1.0.0
 uname -m    # x86_64 = amd64；aarch64/arm64 = ARM
 ```
 
-**ARM 机器的做法**：离线 amd64 归档不适用，需在 ARM 机器上自行构建（`Dockerfile` 基于 `golang:1.23.6-alpine`，`CGO_ENABLED=0`，可原生构建对应架构）：
+若确实报错，多半是被固定到了单架构标签或手动搬运了不匹配的镜像。改回默认的多架构标签重拉即可：
 
 ```bash
-docker compose -f docker-compose.build.yml up -d --build
+docker pull buffer1705/sk5proxy:v1.0.0   # 多架构清单，自动匹配
+docker compose up -d
 ```
 
-或在别处用 buildx 跨架构构建 arm64 镜像再 `docker save` 搬过去。amd64 归档不要硬塞给 ARM 宿主。
+需要发布尚未覆盖的架构时，通过 CI（`.github/workflows/docker-publish.yml`，构建 amd64 与 arm64）打新版本，见 `docs/deployment.md`。
 
 ## 查看日志与健康状态
 
 ```bash
 # 实时日志
-docker compose -f docker-compose.offline.yml logs -f
+docker compose logs -f
 
 # 容器与健康状态（STATUS 列会显示 healthy / unhealthy）
-docker compose -f docker-compose.offline.yml ps
+docker compose ps
 
 # 直接探管理 HTTP 端点
 curl -i http://127.0.0.1:8081/healthz
 ```
 
-healthcheck 定义在两份 compose 里：每 10s 跑一次 `wget -q -O - http://127.0.0.1:8081/healthz`，超时 3s，连续 3 次失败标记 `unhealthy`，启动宽限 3s。
+healthcheck 定义在 compose 里：每 10s 跑一次 `wget -q -O - http://127.0.0.1:8081/healthz`，超时 3s，连续 3 次失败标记 `unhealthy`，启动宽限 3s。
 
 **该 healthcheck 只探本服务自身**，不代表任何上游代理可用；本服务不对上游做健康检查或探活。
 
