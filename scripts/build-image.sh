@@ -31,7 +31,7 @@ if docker buildx version >/dev/null 2>&1; then
   docker buildx build --load --platform "linux/${arch}" -t "$image" "$repo_root"
 else
   printf '未检测到 buildx，使用本机架构的 Docker 传统构建器。\n' >&2
-  docker build -t "$image" "$repo_root"
+  DOCKER_BUILDKIT=0 docker build -t "$image" "$repo_root"
 fi
 
 docker tag "$image" sk5proxy:offline
