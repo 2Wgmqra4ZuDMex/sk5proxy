@@ -1,0 +1,22 @@
+{
+  "activeId": "",
+  "upstreams": [],
+  "listeners": [
+    {
+      "id": "default-socks5",
+      "name": "Default SOCKS5",
+      "type": "socks5",
+      "address": "127.0.0.1:1080",
+      "upstreamId": "",
+      "enabled": true
+    },
+    {
+      "id": "default-http",
+      "name": "Default HTTP",
+      "type": "http",
+      "address": "127.0.0.1:8080",
+      "upstreamId": "",
+      "enabled": true
+    }
+  ]
+}
