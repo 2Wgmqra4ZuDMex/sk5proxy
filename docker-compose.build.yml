@@ -1,7 +1,10 @@
 services:
   sk5proxy:
-    image: ${SK5_IMAGE:-sk5proxy:offline}
-    pull_policy: never
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sk5proxy:local
+    pull_policy: build
     restart: unless-stopped
     environment:
       SK5_CONFIG_PATH: /data/config.json
