@@ -4,14 +4,47 @@
 
 面向运维的完整文档见 `docs/`：
 
-- `docs/deployment.md`：离线 Docker 部署与多监听器远程访问
+- `docs/deployment.md`：Docker Hub 部署与多监听器远程访问
 - `docs/troubleshooting.md`：常见故障排查
 
-## 快速开始（Docker Hub 镜像，推荐）
+## 快速开始（Docker Hub 镜像）
 
 镜像已发布到 Docker Hub：**[`buffer1705/sk5proxy`](https://hub.docker.com/r/buffer1705/sk5proxy)**，含 `v1.0.0` 与 `latest` 两个标签，多架构支持 `linux/amd64` 与 `linux/arm64`（同一标签自动匹配宿主架构，无需手动区分）。
 
-默认 `docker-compose.yml` **只使用镜像、不从源码构建**，镜像名为 `${SK5_IMAGE:-sk5proxy:offline}`，`pull_policy: missing` 表示本地缺失时才联网拉取。全新机器直接：
+在目标宿主机装好 Docker 与 Compose 插件后，随仓库取得 `docker-compose.yml` 与 `.env.example`。没克隆仓库时，直接把下面这份完整可用的 `docker-compose.yml` 存到工作目录即可：
+
+```yaml
+services:
+  sk5proxy:
+    image: ${SK5_IMAGE:-buffer1705/sk5proxy:v1.0.0}
+    pull_policy: missing
+    restart: unless-stopped
+    environment:
+      SK5_CONFIG_PATH: /data/config.json
+      SK5_SOCKS_ADDR: 0.0.0.0:1080
+      SK5_HTTP_ADDR: 0.0.0.0:8080
+      SK5_WEB_ADDR: 0.0.0.0:8081
+    ports:
+      - "127.0.0.1:1080:1080"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+      - "${SK5_PROXY_BIND_IP:-127.0.0.1}:${SK5_PROXY_PORT_RANGE:-10080-10180}:${SK5_PROXY_PORT_RANGE:-10080-10180}"
+    volumes:
+      - sk5proxy-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  sk5proxy-data:
+```
+
+默认镜像即 `buffer1705/sk5proxy:v1.0.0`，`pull_policy: missing` 表示本地缺失时才联网拉取。全新机器直接：
 
 ```bash
 cp .env.example .env          # 示例已把 SK5_IMAGE 指向 buffer1705/sk5proxy:v1.0.0
@@ -22,41 +55,19 @@ curl http://127.0.0.1:8081/healthz     # 期望返回 ok
 curl http://127.0.0.1:8081/api/config
 ```
 
+不建仓库、直接用上面那份 YAML 时，可省去 `.env`：compose 内建默认已指向 `buffer1705/sk5proxy:v1.0.0`、绑定回环，直接 `docker compose pull && docker compose up -d` 即可。要调整对外发布地址或端口范围时再放一份 `.env`（见「端口」一节）。
+
 也可以不经 compose 直接拉取镜像确认：
 
 ```bash
 docker pull buffer1705/sk5proxy:v1.0.0
 ```
 
-> **升级已有部署**：不要覆盖已有 `.env`（会连同你的 `SK5_PROXY_BIND_IP`、端口范围等网络设置一起丢）。只把其中的 `SK5_IMAGE` 一行改成 `buffer1705/sk5proxy:v1.0.0`，再 `docker compose pull && docker compose up -d`。生产环境建议固定到具体版本号而非 `latest`。
+生产环境建议固定到具体版本号（如 `buffer1705/sk5proxy:v1.0.0`），而非会随发布漂移的 `latest`。
 
-完全离线时，从发布方取得与宿主架构一致的版本化归档和 `.sha256`，先校验再载入，并把 `.env` 的 `SK5_IMAGE` 改回本地离线镜像：
+> **升级已有部署**：不要覆盖已有 `.env`（会连同你的 `SK5_PROXY_BIND_IP`、端口范围等网络设置一起丢）。只把其中的 `SK5_IMAGE` 一行改成新的 `buffer1705/sk5proxy:<版本>`，再 `docker compose pull && docker compose up -d`。命名卷 `sk5proxy-data` 会保留，配置不丢。
 
-```bash
-cd dist
-sha256sum -c sk5proxy-v1.0.0-linux-amd64.tar.gz.sha256
-docker load -i sk5proxy-v1.0.0-linux-amd64.tar.gz
-cd ..
-
-# .env 里设 SK5_IMAGE=sk5proxy:offline
-# 默认入口（本地已有镜像，pull_policy: missing 不会再联网）
-docker compose up -d
-# 旧部署脚本仍可继续使用严格不拉取的兼容入口：
-# docker compose -f docker-compose.offline.yml up -d
-
-curl http://127.0.0.1:8081/healthz
-curl http://127.0.0.1:8081/api/config
-```
-
-仓库当前保留的历史 amd64 归档已在本地整理为 `dist/sk5proxy-980be17-linux-amd64.tar.gz`（`dist/` 被 Git 忽略，根目录原件仍保留）。新归档用 `scripts/build-image.sh <版本>` 生成，文件名包含版本和架构，并带 SHA-256 校验文件。
-
-需要显式从源码构建时，使用独立的开发 Compose；它保留相同服务名、卷、端口和运行参数：
-
-```bash
-docker compose -f docker-compose.build.yml up -d --build
-```
-
-Docker Hub 发布流程、所需输入和完整离线流程见 `docs/deployment.md`。
+Docker Hub 部署与发布流程、所需输入见 `docs/deployment.md`。
 
 ## 端口
 
@@ -170,6 +181,6 @@ Docker **不会**在容器运行后自动为 Web 新建的端口打洞。监听�
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go test -race -shuffle=on -count=1 ./...
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go vet ./...
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go build -buildvcs=false ./cmd/sk5proxy
-docker compose -f docker-compose.build.yml build
-scripts/build-image.sh v1.0.0
 ```
+
+发布新版本走 CI：给仓库打 `vMAJOR.MINOR.PATCH` tag（或在 GitHub Actions 手动运行并填相同格式的 `version`），`.github/workflows/docker-publish.yml` 会用根目录 `Dockerfile` 构建 `linux/amd64` 与 `linux/arm64` 并推送多架构镜像到 Docker Hub。流程细节见 `docs/deployment.md`。
