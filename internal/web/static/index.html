@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SK5 代理控制台 - 管理 SOCKS5/HTTP 下游监听入口与上游代理">
+  <title>SK5 代理控制台</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="listeners.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1 class="header-title">代理控制台</h1>
+    </header>
+
+    <main class="main">
+      <div id="action-error" class="action-error" role="alert" hidden></div>
+
+      <div id="loading-state" class="loading-state">
+        <div class="spinner" aria-label="加载中"></div>
+      </div>
+
+      <div id="error-state" class="error-state" hidden>
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+          <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2" fill="none"/>
+          <path d="M24 16v8M24 28v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <h2 class="error-title">加载失败</h2>
+        <p class="error-description" id="error-message">无法连接到服务器</p>
+        <button class="btn btn-primary" id="retry-btn">重试</button>
+      </div>
+
+      <div id="content-area">
+        <!-- Listener section (primary) -->
+        <section class="section" aria-labelledby="listeners-heading">
+          <div class="section-header">
+            <h2 id="listeners-heading" class="section-title">监听入口</h2>
+            <button class="btn btn-primary" id="add-listener-btn" aria-label="添加监听入口">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              添加监听
+            </button>
+          </div>
+          <div id="listener-action-error" class="action-error" role="alert" hidden></div>
+          <div id="listeners-list" class="listeners-list" role="list" aria-live="polite"></div>
+          <div id="listeners-empty" class="empty-state" hidden>
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2" fill="none"/>
+              <path d="M24 16v16M16 24h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <h3 class="empty-title">暂无监听入口</h3>
+            <p class="empty-description">点击上方"添加监听"按钮创建代理入口</p>
+          </div>
+        </section>
+
+        <!-- Upstream section (secondary) -->
+        <section class="section" aria-labelledby="upstreams-heading">
+          <div class="section-header">
+            <h2 id="upstreams-heading" class="section-title">上游代理</h2>
+            <button class="btn btn-secondary" id="add-upstream-btn" aria-label="添加上游代理">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              添加上游
+            </button>
+          </div>
+          <div id="upstreams-list" class="upstreams-list" role="list" aria-live="polite"></div>
+          <div id="upstreams-empty" class="empty-state" hidden>
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2" fill="none"/>
+              <path d="M24 16v16M16 24h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <h3 class="empty-title">暂无上游配置</h3>
+            <p class="empty-description">点击上方"添加上游"按钮开始配置代理</p>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Listener dialog -->
+  <dialog id="listener-dialog" class="modal" aria-labelledby="listener-dialog-title">
+    <form id="listener-form" class="modal-form" aria-describedby="listener-form-error">
+      <h2 id="listener-dialog-title" class="modal-title">添加监听</h2>
+      <div id="listener-form-error" class="form-error" role="alert" hidden></div>
+
+      <div class="form-field">
+        <label for="listener-field-id" class="input-label">标识符</label>
+        <input type="text" id="listener-field-id" name="id" class="input" required autocomplete="off">
+      </div>
+
+      <div class="form-field">
+        <label for="listener-field-name" class="input-label">名称</label>
+        <input type="text" id="listener-field-name" name="name" class="input" required autocomplete="off">
+      </div>
+
+      <div class="form-field">
+        <label for="listener-field-type" class="input-label">类型</label>
+        <select id="listener-field-type" name="type" class="input" required>
+          <option value="http">HTTP</option>
+          <option value="socks5">SOCKS5</option>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label for="listener-field-address" class="input-label">地址</label>
+        <input type="text" id="listener-field-address" name="address" class="input" required placeholder="0.0.0.0:10080" autocomplete="off">
+        <p class="form-hint">远程访问使用 0.0.0.0:端口，通过服务器 IP 连接</p>
+      </div>
+
+      <div class="form-field">
+        <label for="listener-field-upstream" class="input-label">上游</label>
+        <select id="listener-field-upstream" name="upstream" class="input">
+          <option value="">未选择</option>
+        </select>
+      </div>
+
+      <div class="form-field form-field-checkbox">
+        <label class="checkbox-label">
+          <input type="checkbox" id="listener-field-enabled" name="enabled" checked>
+          <span>启用</span>
+        </label>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="listener-cancel-btn">取消</button>
+        <button type="submit" class="btn btn-primary" id="listener-submit-btn">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Upstream dialog -->
+  <dialog id="upstream-dialog" class="modal" aria-labelledby="dialog-title">
+    <form id="upstream-form" class="modal-form" aria-describedby="form-error">
+      <h2 id="dialog-title" class="modal-title">添加上游</h2>
+      <div id="form-error" class="form-error" role="alert" hidden></div>
+
+      <div class="form-field">
+        <label for="field-id" class="input-label">标识符</label>
+        <input type="text" id="field-id" name="id" class="input" required autocomplete="off">
+      </div>
+
+      <div class="form-field">
+        <label for="field-name" class="input-label">名称</label>
+        <input type="text" id="field-name" name="name" class="input" required autocomplete="off">
+      </div>
+
+      <div class="form-field">
+        <label for="field-type" class="input-label">类型</label>
+        <select id="field-type" name="type" class="input" required>
+          <option value="http">HTTP</option>
+          <option value="socks5">SOCKS5</option>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label for="field-address" class="input-label">地址</label>
+        <input type="text" id="field-address" name="address" class="input" required placeholder="127.0.0.1:1080" autocomplete="off">
+      </div>
+
+      <div class="form-field">
+        <label for="field-username" class="input-label">用户名</label>
+        <input type="text" id="field-username" name="username" class="input" autocomplete="off">
+      </div>
+
+      <div class="form-field">
+        <label for="field-password" class="input-label">密码</label>
+        <input type="password" id="field-password" name="password" class="input" autocomplete="new-password">
+        <p class="form-hint" id="password-hint" hidden>留空则保留原密码</p>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="cancel-btn">取消</button>
+        <button type="submit" class="btn btn-primary" id="submit-btn">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Shared confirm dialog -->
+  <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-title">
+    <div class="modal-content">
+      <h2 id="confirm-title" class="modal-title">确认删除</h2>
+      <p id="confirm-message" class="confirm-message"></p>
+      <div id="confirm-error" class="confirm-error" role="alert" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" id="confirm-cancel-btn">取消</button>
+        <button type="button" class="btn btn-destructive" id="confirm-delete-btn">删除</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="status-announcer" class="sr-only" aria-live="assertive" aria-atomic="true"></div>
+
+  <script src="api.js"></script>
+  <script src="state.js"></script>
+  <script src="dom.js"></script>
+  <script src="listeners.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
