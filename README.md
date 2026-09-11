@@ -7,23 +7,39 @@
 - `docs/deployment.md`：离线 Docker 部署与多监听器远程访问
 - `docs/troubleshooting.md`：常见故障排查
 
-## 快速开始（预构建镜像，推荐）
+## 快速开始（Docker Hub 镜像，推荐）
 
-默认 `docker-compose.yml` **只使用镜像、不从源码构建**，镜像名为 `${SK5_IMAGE:-sk5proxy:offline}`，本地没有时允许从 registry 拉取。复制环境变量示例：
+镜像已发布到 Docker Hub：**[`buffer1705/sk5proxy`](https://hub.docker.com/r/buffer1705/sk5proxy)**，含 `v1.0.0` 与 `latest` 两个标签，多架构支持 `linux/amd64` 与 `linux/arm64`（同一标签自动匹配宿主架构，无需手动区分）。
+
+默认 `docker-compose.yml` **只使用镜像、不从源码构建**，镜像名为 `${SK5_IMAGE:-sk5proxy:offline}`，`pull_policy: missing` 表示本地缺失时才联网拉取。全新机器直接：
 
 ```bash
-cp .env.example .env
+cp .env.example .env          # 示例已把 SK5_IMAGE 指向 buffer1705/sk5proxy:v1.0.0
+docker compose pull           # 拉取已发布的多架构镜像
+docker compose up -d
+
+curl http://127.0.0.1:8081/healthz     # 期望返回 ok
+curl http://127.0.0.1:8081/api/config
 ```
 
-完全离线时，从发布方取得与宿主架构一致的版本化归档和 `.sha256`，先校验再载入：
+也可以不经 compose 直接拉取镜像确认：
+
+```bash
+docker pull buffer1705/sk5proxy:v1.0.0
+```
+
+> **升级已有部署**：不要覆盖已有 `.env`（会连同你的 `SK5_PROXY_BIND_IP`、端口范围等网络设置一起丢）。只把其中的 `SK5_IMAGE` 一行改成 `buffer1705/sk5proxy:v1.0.0`，再 `docker compose pull && docker compose up -d`。生产环境建议固定到具体版本号而非 `latest`。
+
+完全离线时，从发布方取得与宿主架构一致的版本化归档和 `.sha256`，先校验再载入，并把 `.env` 的 `SK5_IMAGE` 改回本地离线镜像：
 
 ```bash
 cd dist
-sha256sum -c sk5proxy-v1.2.3-linux-amd64.tar.gz.sha256
-docker load -i sk5proxy-v1.2.3-linux-amd64.tar.gz
+sha256sum -c sk5proxy-v1.0.0-linux-amd64.tar.gz.sha256
+docker load -i sk5proxy-v1.0.0-linux-amd64.tar.gz
 cd ..
 
-# 默认入口（推荐）
+# .env 里设 SK5_IMAGE=sk5proxy:offline
+# 默认入口（本地已有镜像，pull_policy: missing 不会再联网）
 docker compose up -d
 # 旧部署脚本仍可继续使用严格不拉取的兼容入口：
 # docker compose -f docker-compose.offline.yml up -d
@@ -40,7 +56,7 @@ curl http://127.0.0.1:8081/api/config
 docker compose -f docker-compose.build.yml up -d --build
 ```
 
-Docker Hub 自动发布的配置、所需输入和完整离线流程见 `docs/deployment.md`。
+Docker Hub 发布流程、所需输入和完整离线流程见 `docs/deployment.md`。
 
 ## 端口
 
@@ -155,5 +171,5 @@ docker run --rm -v "$PWD":/src -w /src golang:1.23 go test -race -shuffle=on -co
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go vet ./...
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go build -buildvcs=false ./cmd/sk5proxy
 docker compose -f docker-compose.build.yml build
-scripts/build-image.sh v1.2.3
+scripts/build-image.sh v1.0.0
 ```

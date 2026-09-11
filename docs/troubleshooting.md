@@ -8,13 +8,22 @@
 
 **原因**：显式开发文件 `docker-compose.build.yml` 带 `build:`，构建期要联网拉 Go 模块（`Dockerfile` 里的 `RUN go mod download`）。离线机器上必然失败。
 
-**离线绕过**：不要用带构建的 compose，改用离线镜像：
+**联网机器**：直接拉 Docker Hub 已发布的多架构镜像即可，完全不构建：
+
+```bash
+# .env 里 SK5_IMAGE=buffer1705/sk5proxy:v1.0.0（cp .env.example .env 即是此默认）
+docker compose pull
+docker compose up -d
+```
+
+**离线绕过**：不能联网时改用 `docker load` 的本地归档镜像：
 
 ```bash
 cd dist
-sha256sum -c sk5proxy-v1.2.3-linux-amd64.tar.gz.sha256
-docker load -i sk5proxy-v1.2.3-linux-amd64.tar.gz
+sha256sum -c sk5proxy-v1.0.0-linux-amd64.tar.gz.sha256
+docker load -i sk5proxy-v1.0.0-linux-amd64.tar.gz
 cd ..
+# .env 里 SK5_IMAGE=sk5proxy:offline
 docker compose up -d
 ```
 
@@ -23,7 +32,7 @@ docker compose up -d
 若确实要在联网机器上构建，再把镜像导出搬到离线机：
 
 ```bash
-scripts/build-image.sh v1.2.3
+scripts/build-image.sh v1.0.0
 # 将 dist/ 中归档和 .sha256 一起拷到离线机
 ```
 
