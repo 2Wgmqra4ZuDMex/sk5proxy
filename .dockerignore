@@ -1,0 +1,10 @@
+.git
+.codegraph
+.omo
+.playwright-mcp
+config.json
+sk5proxy
+README.md
+*-desktop-*.png
+*-tablet-*.png
+*-mobile-*.png

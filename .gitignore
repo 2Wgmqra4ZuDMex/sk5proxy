@@ -1,0 +1,14 @@
+/config.json
+/sk5proxy
+/.playwright-mcp/
+/*-desktop-*.png
+/*-tablet-*.png
+/*-mobile-*.png
+*.log
+/.omo/
+/.codegraph
+/.env
+/.env.*
+/*.tar
+/*.tar.gz
+/data/
