@@ -1,0 +1,30 @@
+services:
+  sk5proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: sk5proxy:local
+    restart: unless-stopped
+    environment:
+      SK5_CONFIG_PATH: /data/config.json
+      SK5_SOCKS_ADDR: 0.0.0.0:1080
+      SK5_HTTP_ADDR: 0.0.0.0:8080
+      SK5_WEB_ADDR: 0.0.0.0:8081
+    ports:
+      - "127.0.0.1:1080:1080"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+      - "${SK5_PROXY_BIND_IP:-127.0.0.1}:${SK5_PROXY_PORT_RANGE:-10080-10180}:${SK5_PROXY_PORT_RANGE:-10080-10180}"
+    volumes:
+      - sk5proxy-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  sk5proxy-data:
