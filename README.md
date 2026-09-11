@@ -7,29 +7,40 @@
 - `docs/deployment.md`：离线 Docker 部署与多监听器远程访问
 - `docs/troubleshooting.md`：常见故障排查
 
-## 快速开始（离线镜像，推荐）
+## 快速开始（预构建镜像，推荐）
 
-离线镜像归档 `sk5proxy-linux-amd64.tar.gz` 由发布方单独提供，**不随 Git 仓库分发**，除非某个 Release 明确附带该文件。请勿假设仓库里一定有它，也不要从不存在的 Release 下载。拿到归档后：
+默认 `docker-compose.yml` **只使用镜像、不从源码构建**，镜像名为 `${SK5_IMAGE:-sk5proxy:offline}`，本地没有时允许从 registry 拉取。复制环境变量示例：
 
 ```bash
-# 1. 载入镜像（归档内镜像标签为 sk5proxy:offline）
-docker load -i sk5proxy-linux-amd64.tar.gz
+cp .env.example .env
+```
 
-# 2. 无需构建，直接用离线 compose 启动
-docker compose -f docker-compose.offline.yml up -d
+完全离线时，从发布方取得与宿主架构一致的版本化归档和 `.sha256`，先校验再载入：
 
-# 3. 验证
+```bash
+cd dist
+sha256sum -c sk5proxy-v1.2.3-linux-amd64.tar.gz.sha256
+docker load -i sk5proxy-v1.2.3-linux-amd64.tar.gz
+cd ..
+
+# 默认入口（推荐）
+docker compose up -d
+# 旧部署脚本仍可继续使用严格不拉取的兼容入口：
+# docker compose -f docker-compose.offline.yml up -d
+
 curl http://127.0.0.1:8081/healthz
 curl http://127.0.0.1:8081/api/config
 ```
 
-`docker-compose.offline.yml` 使用 `image: sk5proxy:offline` 且 `pull_policy: never`，不会联网构建或拉取。归档为 amd64（x86_64）镜像，只能在 amd64 宿主机运行，ARM 机器需要另行构建，详见 `docs/troubleshooting.md`。
+仓库当前保留的历史 amd64 归档已在本地整理为 `dist/sk5proxy-980be17-linux-amd64.tar.gz`（`dist/` 被 Git 忽略，根目录原件仍保留）。新归档用 `scripts/build-image.sh <版本>` 生成，文件名包含版本和架构，并带 SHA-256 校验文件。
 
-需要从源码构建镜像时，改用带 `build:` 的默认 compose：
+需要显式从源码构建时，使用独立的开发 Compose；它保留相同服务名、卷、端口和运行参数：
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.build.yml up -d --build
 ```
+
+Docker Hub 自动发布的配置、所需输入和完整离线流程见 `docs/deployment.md`。
 
 ## 端口
 
@@ -143,5 +154,6 @@ Docker **不会**在容器运行后自动为 Web 新建的端口打洞。监听�
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go test -race -shuffle=on -count=1 ./...
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go vet ./...
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go build -buildvcs=false ./cmd/sk5proxy
-docker build -t sk5proxy:local .
+docker compose -f docker-compose.build.yml build
+scripts/build-image.sh v1.2.3
 ```

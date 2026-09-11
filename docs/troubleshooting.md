@@ -4,15 +4,18 @@
 
 ## 构建时 Go 模块下载超时（离线环境）
 
-**现象**：`docker compose up -d --build` 卡在 `go mod download` 或类似步骤，报网络超时。
+**现象**：`docker compose -f docker-compose.build.yml up -d --build` 卡在 `go mod download` 或类似步骤，报网络超时。
 
-**原因**：默认 `docker-compose.yml` 带 `build:`，构建期要联网拉 Go 模块（`Dockerfile` 里的 `RUN go mod download`）。离线机器上必然失败。
+**原因**：显式开发文件 `docker-compose.build.yml` 带 `build:`，构建期要联网拉 Go 模块（`Dockerfile` 里的 `RUN go mod download`）。离线机器上必然失败。
 
 **离线绕过**：不要用带构建的 compose，改用离线镜像：
 
 ```bash
-docker load -i sk5proxy-linux-amd64.tar.gz
-docker compose -f docker-compose.offline.yml up -d
+cd dist
+sha256sum -c sk5proxy-v1.2.3-linux-amd64.tar.gz.sha256
+docker load -i sk5proxy-v1.2.3-linux-amd64.tar.gz
+cd ..
+docker compose up -d
 ```
 
 离线镜像已经把二进制打进去了，启动路径完全不触网、不下载任何模块。归档由发布方单独提供，见 `docs/deployment.md`。
@@ -20,9 +23,8 @@ docker compose -f docker-compose.offline.yml up -d
 若确实要在联网机器上构建，再把镜像导出搬到离线机：
 
 ```bash
-docker build -t sk5proxy:offline .
-docker save sk5proxy:offline -o sk5proxy-linux-amd64.tar.gz
-# 拷到离线机后：docker load -i ...
+scripts/build-image.sh v1.2.3
+# 将 dist/ 中归档和 .sha256 一起拷到离线机
 ```
 
 ## 端口绑定冲突
@@ -48,7 +50,7 @@ docker save sk5proxy:offline -o sk5proxy-linux-amd64.tar.gz
 
 **现象**：`docker load` 或启动后容器立刻退出，报 `exec format error` 或平台不匹配警告。
 
-**原因**：离线归档 `sk5proxy-linux-amd64.tar.gz` 是 **amd64（x86_64）** 镜像，无法在 ARM（如 Apple Silicon、树莓派、ARM 云主机）原生运行。
+**原因**：归档文件名中的架构必须匹配宿主机；`linux-amd64` 镜像无法在 ARM（如 Apple Silicon、树莓派、ARM 云主机）原生运行。
 
 **确认宿主机架构**：
 
@@ -59,7 +61,7 @@ uname -m    # x86_64 = amd64；aarch64/arm64 = ARM
 **ARM 机器的做法**：离线 amd64 归档不适用，需在 ARM 机器上自行构建（`Dockerfile` 基于 `golang:1.23.6-alpine`，`CGO_ENABLED=0`，可原生构建对应架构）：
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.build.yml up -d --build
 ```
 
 或在别处用 buildx 跨架构构建 arm64 镜像再 `docker save` 搬过去。amd64 归档不要硬塞给 ARM 宿主。
