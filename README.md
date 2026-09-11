@@ -142,6 +142,6 @@ Docker **不会**在容器运行后自动为 Web 新建的端口打洞。监听�
 ```bash
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go test -race -shuffle=on -count=1 ./...
 docker run --rm -v "$PWD":/src -w /src golang:1.23 go vet ./...
-docker run --rm -v "$PWD":/src -w /src golang:1.23 go build ./cmd/sk5proxy
+docker run --rm -v "$PWD":/src -w /src golang:1.23 go build -buildvcs=false ./cmd/sk5proxy
 docker build -t sk5proxy:local .
 ```
