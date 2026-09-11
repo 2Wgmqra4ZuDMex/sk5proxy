@@ -9,6 +9,8 @@
 /.codegraph
 /.env
 /.env.*
+!/.env.example
 /*.tar
 /*.tar.gz
+/dist/
 /data/

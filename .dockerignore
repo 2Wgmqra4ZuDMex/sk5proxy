@@ -4,6 +4,9 @@
 .playwright-mcp
 config.json
 sk5proxy
+dist
+*.tar
+*.tar.gz
 README.md
 *-desktop-*.png
 *-tablet-*.png
